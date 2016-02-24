@@ -1,0 +1,31 @@
+{
+  "name": "nano-cache",
+  "version": "1.0.0",
+  "description": "simple node cache module",
+  "main": "./index.js",
+  "directories": {
+    "test": "test"
+  },
+  "authors": [
+    {
+      "email": "aziz.khoury@cxense.com"
+    }
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "extend": "~3.0.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akhoury/nano-cache.git"
+  },
+  "bugs": {
+    "url": "https://github.com/akhoury/nano-cache/issues"
+  },
+  "homepage": "https://github.com/akhoury/nano-cache#readme"
+}
