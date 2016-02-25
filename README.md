@@ -1,5 +1,5 @@
 # nano-cache
-quick cache in-memory cache solution for nodejs
+quick in-memory cache solution for nodejs
 
 # usage
 ```
