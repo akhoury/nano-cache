@@ -1,106 +1,287 @@
+/*!
+ * nano-cache
+ * Copyright (c) 2017 Cxense Inc
+ * Authors:  aziz.khoury@cxense.com, greg.kindel@cxense.com
+ * MIT license https://opensource.org/licenses/MIT
+ */
+
 var extend = require("extend");
 
-var defaults = {
-    ttl: null,
-    limit: null,
-    clearExpiredInterval: 60000 // every 1 min
+var NanoCache = function (options) {
+    this.init(options);
 };
 
-var Cache = function (options) {
-    if (!(this instanceof Cache)) {
-        return new Cache(options);
-    }
-    this.clear();
-    this.options = extend(true, {}, defaults, options);
-
-    if (this.options.clearExpiredInterval) {
-        this._clearExpiredInterval = setInterval(this.clearExpired.bind(this), this.options.clearExpiredInterval);
-    }
+NanoCache.STRATEGY ={
+    OLDEST_ACCESS : "OLDEST_ACCESS",
+    LOWEST_RATE : "LOWEST_RATE",
+    WEIGHTED : "WEIGHTED"
 };
 
-Cache.prototype = {
+NanoCache.SIZE ={
+    GB :  Math.pow(2, 30),
+    MB :  Math.pow(2, 20),
+    KB :  Math.pow(2, 10)
+};
+
+NanoCache.DEFAULTS = {
+    ttl: null,   // msec
+    limit: null, // hits
+    bytes: Infinity,
+    protection: 60 * 1000, // msec
+    strategy: NanoCache.STRATEGY.WEIGHTED,
+    clearExpiredInterval: 60 * 1000 // every 1 min
+};
+
+NanoCache.prototype = {
+    init : function (opt) {
+        this.options = extend({}, NanoCache.DEFAULTS, opt);
+        this.hits = 0;
+        this.misses = 0;
+        clearInterval(this._checkInterval);
+        this._checkInterval = null;
+        this.clear();
+        if (this.options.clearExpiredInterval) {
+            this._checkInterval = setInterval(
+                this.clearExpired.bind(this),
+                this.options.clearExpiredInterval
+            );
+        }
+    },
+
     get: function (key) {
-        var value = this.data[key];
+        this._checkExpired(key);
 
-        if (this.isTTLExpired(key) || this.isLimitReached(key)) {
-            this.del(key);
-            return;
+        var datum = this._data[key];
+        if(! datum ) {
+            this.misses++;
+            return null;
         }
 
-        if (this.counts[key] >= 0) {
-            this.counts[key]++;
-        }
-
-        return value;
+        this.hits++;
+        datum.hits++;
+        datum.accessed = this.now();
+        return this._value(key);
     },
 
     set: function (key, value, options) {
-        options = options || {};
+        var opt = extend({}, this.options, options);
 
-        this.data[key] = value;
+        this.del(key);
 
-        var ttl = parseInt(options.ttl || this.options.ttl, 10);
-        if (ttl) {
-            this.ttls[key] = new Date().getTime() + ttl ;
+        var epoch = this.now();
+        var json = JSON.stringify(value);
+        var bytes = Buffer.byteLength(json, 'utf8');
+
+        var datum = this._data[key] = {
+            key: key,
+            hits : 0,
+            accessed : epoch,
+            updated : epoch,
+            expires :  null,
+            value : json,
+            bytes : bytes,
+            ttl: opt.ttl,
+            cost: opt.cost || 1,
+            limit: opt.limit
+        };
+
+        this.bytes += datum.bytes;
+
+        var ttl = parseInt(datum.ttl, 10);
+        if (! isNaN(ttl) ) {
+            datum.expires = epoch + ttl;
         }
 
-        var limit = parseInt(options.limit || this.options.limit, 10);
-        if (limit) {
-            this.limits[key] = limit;
+        if ( opt.expires instanceof Date ) {
+            opt.expires = opt.expires.getTime();
         }
 
-        this.counts[key] = 0;
+        if ( opt.expires > 0 ) {
+            datum.expires = opt.expires;
+        }
 
-        return value;
+        this._checkLimits();
+
+        return datum.value;
+    },
+
+    info : function (key) {
+        var datum =  this._data[key];
+        if(! datum )
+            return null;
+        return extend({}, datum, {
+            value: this._value(key)
+        });
+    },
+
+    _value : function (key){
+        var datum =  this._data[key];
+        return datum && JSON.parse(datum.value);
     },
 
     del: function (key) {
-        var value = this.data[key];
-        delete this.data[key];
-        delete this.ttls[key];
-        delete this.limits[key];
-        delete this.counts[key];
-        return value;
+        var info  = this.info(key);
+        if( ! info )
+            return null;
+
+        this.bytes -= info.bytes;
+        delete this._data[key];
+        return info.value;
     },
 
     clear: function () {
-        this.data = {};
-        this.ttls = {};
-        this.limits = {};
-        this.counts = {};
+        this._data = {};
+        this.bytes = 0;
     },
 
     clearExpired: function () {
-        Object.keys(this.data).forEach(function(key) {
-            if (this.isTTLExpired(key) || this.isLimitReached(key)) {
-                this.del(key);
-            }
-        }.bind(this));
+        Object.keys(this._data).forEach( this._checkExpired.bind(this) );
     },
 
+    _checkExpired : function (key) {
+        if ( this.isExpired(key) ) {
+            this.del(key);
+        }
+    },
+
+    _checkLimits : function () {
+        this.clearExpired();
+
+        var self = this;
+
+        if( this.options.bytes ){
+            this._doEviction(function () {
+                var stats = self.stats();
+                return stats.bytes > self.options.bytes;
+            });
+        }
+    },
+
+    isExpired : function (key) {
+        return this.isTTLExpired(key) || this.isLimitReached(key);
+    },
 
     isTTLExpired: function (key) {
-        var ttl = this.ttls[key];
-
-        return ttl == null ? false : ttl < (new Date()).getTime();
+        var datum = this._data[key];
+        return datum && datum.expires > 0 && datum.expires <= this.now();
     },
 
     isLimitReached: function (key) {
-        var limit = this.limits[key];
-        var count = this.counts[key];
+        var datum = this._data[key];
+        return datum && datum.limit > 0 && datum.limit <= datum.hits;
+    },
 
-        return limit == null ? false : count >= limit;
+    now : function () {
+        return (new Date()).getTime();
+    },
+
+    stats : function () {
+        return {
+            count: Object.keys(this._data).length,
+            hits : this.hits,
+            misses : this.misses,
+            bytes: this.bytes
+        }
+    },
+
+    _doEviction : function (callback) {
+        switch(this.options.strategy){
+            case NanoCache.STRATEGY.WEIGHTED:
+                this._evictWeightedRate(callback);
+                break;
+            case NanoCache.STRATEGY.LOWEST_RATE:
+                this._evictLeastUsed(callback);
+                break;
+            case NanoCache.STRATEGY.OLDEST_ACCESS:
+              this._evictOldest(callback)
+        }
+    },
+
+    _evictOldest : function (callback) {
+        var keepGoing = callback();
+        if( ! keepGoing )
+            return;
+
+        var items = this._getItemHeuristics();
+        var sorted = items.sort( this._getSortProtectedFn("accessed") );
+
+        while ( keepGoing ) {
+            this.del(sorted.pop().key);
+            keepGoing = callback();
+        }
+    },
+
+    _evictLeastUsed : function (callback) {
+        var keepGoing = callback();
+        if( ! keepGoing )
+            return;
+
+        var items = this._getItemHeuristics();
+        var sorted = items.sort( this._getSortProtectedFn("rate") );
+
+        while ( keepGoing ) {
+            var key = sorted.pop().key;
+            this.del(key);
+            keepGoing = callback();
+        }
+    },
+
+    _evictWeightedRate : function (callback) {
+        var keepGoing = callback();
+        if( ! keepGoing )
+            return;
+
+        var items = this._getItemHeuristics();
+        var sorted = items.sort( this._getSortProtectedFn("weight") );
+
+        while ( keepGoing ) {
+            var key = sorted.pop().key;
+            this.del(key);
+            keepGoing = callback();
+        }
+    },
+
+    _getSortProtectedFn : function (prop){
+        return (function (a, b) {
+            if ( a.protected < b.protected )
+                return 1;
+
+            if ( b.protected > a.protected )
+                return -1;
+
+            if (a[prop] === b[prop])
+                return 0;
+
+            return a[prop] < b[prop] ? 1 : -1
+        }).bind(this);
+    },
+
+    _getItemHeuristics : function () {
+        var keys = Object.keys(this._data);
+        var present = this.now();
+
+        return keys.map(function (key) {
+            var datum = this._data[key];
+            var age = (present - datum.updated);
+            var rate = datum.hits / age;
+
+            return extend({
+                rate: rate,
+                weight: (rate * datum.cost),
+                protected: Math.max( this.options.protection - age + 1, 0),
+                age: age
+            }, datum);
+        }.bind(this));
     }
 };
 
 // make it useable even without creating an instance of it.
 // basically creating an instance, then copying all non-underscore-starting-functions to the factory
-var cache = Cache._defaultInstance = new Cache();
-var key;
-for (key in cache) {
-    if (typeof cache[key] === 'function' && key.indexOf('_') !== 0) {
-        Cache[key] = cache[key].bind(cache);
+NanoCache.singleton = new NanoCache();
+Object.keys(NanoCache.prototype).forEach(function (key){
+    if (typeof NanoCache.singleton[key] === 'function' && key.indexOf('_') !== 0) {
+        NanoCache[key] = NanoCache.prototype[key].bind(NanoCache.singleton);
     }
-}
+});
 
-module.exports = Cache;
+module.exports = NanoCache;
