@@ -76,3 +76,9 @@ var value = NanoCache.get('mykey');
 * `OLDEST_ACCESS` - the least recently access item is removed
 * `LOWEST_RATE` - the least frequently accessed item is removed, defined by hits over lifetime of item.
 * `WEIGHTED` - similar to LOWEST_RATE, but uses a cost-weighted average, defined by hits over time times item cost.
+
+
+# License
+Copyright (c) 2017 Cxense Inc
+Authors:  aziz.khoury, greg.kindel
+MIT license https://opensource.org/licenses/MIT
