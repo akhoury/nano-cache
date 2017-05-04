@@ -79,6 +79,11 @@ var value = NanoCache.get('mykey');
 
 
 # License
+
 Copyright (c) 2017 Cxense Inc
-Authors:  aziz.khoury, greg.kindel
+
+Authors:
+* aziz.khoury
+* greg.kindel
+
 MIT license https://opensource.org/licenses/MIT
