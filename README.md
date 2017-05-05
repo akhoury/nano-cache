@@ -28,6 +28,7 @@ var cache = new NanoCache({
     limit: 5,
     clearExpiredInterval: 60000
     strategy : NanoCache.STRATEGY.WEIGHTED,
+    bytes : 100 * NanoCache.SIZE.MB,
     protection: 60000
 });
 cache.set('mykey', myvalue);
@@ -67,10 +68,11 @@ var value = NanoCache.get('mykey');
 #  Constructor Options
 * `ttl` time in msec before the item is removed from cache. defaults to null for no limit.
 * `limit` maximum number of reads before item is removed from cache. defaults to null for no limit.
-* `bytes` maximum number of bytes before an item removed from the cach. defaults to Infinity for no limit.
+* `bytes` maximum number of bytes before an item removed from the cache. defaults to Infinity for no limit.
 * `protection` number of msec in which to protect an item from expiry by rate limit. defaults to defaults to 60,000 msec
 * `clearExpiredInterval` if non-zero, interval to check cache for expired items. defaults to 60,000 msec.
 * `strategy` cache eviction strategy if byte limit is reached. can be OLDEST_ACCESS, LOWEST_RATE, or defaults to WEIGHTED.
+* `compress` use compression to reduce in-memory cache size. defaults to true.
 
 # Eviction Strategies:
 * `OLDEST_ACCESS` - the least recently access item is removed
