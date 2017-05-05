@@ -29,7 +29,8 @@ var cache = new NanoCache({
     clearExpiredInterval: 60000
     strategy : NanoCache.STRATEGY.WEIGHTED,
     bytes : 100 * NanoCache.SIZE.MB,
-    protection: 60000
+    protection: 60000,
+    compress: true
 });
 cache.set('mykey', myvalue);
 ```
