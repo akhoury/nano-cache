@@ -1,12 +1,10 @@
 var assert = require('chai').assert;
-
 var NanoCache = require('../index');
-
 
 
 // allows for faster testing as we don't need timeouts
 var fakeNow;
-NanoCache.prototype.now = function  () {
+NanoCache.prototype.now = function () {
     return fakeNow || (new Date()).getTime();
 };
 
@@ -15,34 +13,35 @@ NanoCache.DEFAULTS.protection = 1;
 NanoCache.DEFAULTS.clearExpiredInterval = false;
 
 
-describe('Singleton', function() {
-    TestCache( NanoCache );
-});
+var testCache = function (cache) {
 
-describe('Instance', function() {
-    TestCache( new NanoCache() );
-});
-
-function TestCache (cache) {
-
-    beforeEach( function (){
+    beforeEach(function () {
         fakeNow = null;
         cache.init();
         cache.clear();
     });
 
-    it('should be able to get', function() {
+    it('should be able to get', function () {
         var key = "foo";
-        var val = { foo : 123, bar : { a : 123, b: 123 } };
+        var val = {
+            foo : 123,
+            bar : {
+                a : 123,
+                b : 123
+            }
+        };
         cache.set(key, val);
 
         var ret = cache.get(key);
         assert.deepEqual(val, ret);
     });
 
-    it('should be able to set', function() {
+    it('should be able to set', function () {
         var key = "foo";
         var val = 123;
+        cache.init({
+            compress : false
+        });
         var bytes = JSON.stringify(val).length;
 
         var ret = cache.set(key, val);
@@ -54,9 +53,15 @@ function TestCache (cache) {
     });
 
 
-    it('should be able to delete', function() {
+    it('should be able to delete', function () {
         var key = "foo";
-        var val = { foo : 123, bar : { a : 123, b: 123 } };
+        var val = {
+            foo : 123,
+            bar : {
+                a : 123,
+                b : 123
+            }
+        };
         cache.set(key, val);
         var d = cache.del(key);
         var g = cache.get(key);
@@ -67,20 +72,28 @@ function TestCache (cache) {
     });
 
 
-    it('should be a clone of original data', function() {
+    it('should be a clone of original data', function () {
         var key = "foo";
-        var val = { foo : 123 };
+        var val = {
+            foo : 123
+        };
         cache.set(key, val);
         var ret = cache.get(key);
         ret.foo = 456;
         assert.equal(val.foo, 123);
     });
 
-    it('should be able to info', function() {
+    it('should be able to info', function () {
 
         var key = "foo";
-        var val = { foo : 123, bar : { a : 123, b: 123 } };
-        var size = JSON.stringify(val).length;
+        var val = {
+            foo : 123,
+            bar : {
+                a : 123,
+                b : 123
+            }
+        };
+
         var options = {
             ttl: 60,
             limit: 100
@@ -96,15 +109,18 @@ function TestCache (cache) {
 
         assert.deepEqual(val, ret.value, "has equal value on info");
         assert.equal(ret.updated, fakeNow, "has update time");
-        assert.equal(ret.bytes, size, "has size");
-        assert.isOk(ret.accessed, fakeNow, "has acccess time");
+        assert.isOk(ret.bytes > 0, "has a size");
+        assert.isOk(ret.accessed, fakeNow, "has access time");
         assert.equal(ret.hits, 1, "has been one hit");
         assert.equal(ret.expires, fakeNow + options.ttl, "has expiry");
         assert.equal(ret.limit, options.limit, "has limit");
     });
 
-    it('should support stats', function() {
+    it('should support stats', function () {
         var val = "12345678"; // 10 inc quotes
+        cache.init({
+            compress : false
+        });
         cache.set("a", val);
         cache.set("b", val);
         cache.set("c", val);
@@ -136,7 +152,7 @@ function TestCache (cache) {
 
         fakeNow = 1099;
         ret = cache.get(key);
-        assert.deepEqual(ret, val, "should return object during inteval");
+        assert.deepEqual(ret, val, "should return object during interval");
 
         fakeNow = 1100;
 
@@ -158,7 +174,7 @@ function TestCache (cache) {
 
         fakeNow = 1099;
         ret = cache.get(key);
-        assert.deepEqual(ret, val, "should return object during inteval");
+        assert.deepEqual(ret, val, "should return object during interval");
 
         fakeNow = 1100;
 
@@ -167,29 +183,30 @@ function TestCache (cache) {
     });
 
     it("should have interval based expiry without using get", function (done) {
-        var key = "foo";
         var val = 123;
 
-        cache.init({
-            ttl: 11,
-            clearExpiredInterval: 15
-        });
-
-        cache.set(key, val);
+        fakeNow = 100;
+        cache.set("one", val, { ttl : 15 });
+        cache.set("two", val, { ttl : 30 });
 
         var stats = cache.stats();
-        assert.equal(stats.count, 1, "should have an item after set");
+        assert.equal(stats.count, 2, "should have an item after set");
 
         setTimeout(function () {
-            var stats = cache.stats();
-            assert.equal(stats.count, 1, "should have 1 items after short interval");
+            fakeNow = 110;
+            var s = cache.stats();
+            cache.get("two"); // gets trigger async cleanup
+            assert.equal(s.count, 2, "should still have 2 items after 15s interval");
+
+            fakeNow = 120; // advance time for async cleanup
         }, 10);
 
         setTimeout(function () {
-            var stats = cache.stats();
-            assert.equal(stats.count, 0, "should have no items after long interval");
+            fakeNow = 125;
+            var s = cache.stats();
+            assert.equal(s.count, 1, "should have 1 item after 25 sec interval");
             done();
-        }, 20)
+        }, 20);
     });
 
     it("should expire based on item hit limit", function () {
@@ -219,22 +236,23 @@ function TestCache (cache) {
         var val = "12345678"; // 10 inc quotes
         var ret;
         cache.init({
+            compress: false,
             strategy: NanoCache.STRATEGY.OLDEST_ACCESS,
             bytes : 25
         });
         fakeNow = 100;
         cache.set("one", val);
 
-        fakeNow++;
+        fakeNow += 1;
         cache.set("two", val);
 
-        fakeNow++;
+        fakeNow += 1;
         cache.get("one");
 
-        fakeNow++;
+        fakeNow += 1;
         cache.set("three", val);
 
-        fakeNow++;
+        fakeNow += 1;
         ret = cache.get("two");
         assert.deepEqual(ret, null, "least accessed should expire");
     });
@@ -250,17 +268,17 @@ function TestCache (cache) {
         cache.set("one", val);
         cache.set("two", val);
 
-        fakeNow++;
+        fakeNow += 1;
         cache.get("one");
         cache.get("one");
 
-        fakeNow++;
+        fakeNow += 1;
         cache.get("two", val);
 
-        fakeNow++;
+        fakeNow += 1;
         cache.set("three", val);
 
-        fakeNow++;
+        fakeNow += 1;
         ret = cache.get("two");
 
         assert.deepEqual(ret, null, "least expensive should expire");
@@ -274,22 +292,22 @@ function TestCache (cache) {
             bytes : 35
         });
         fakeNow = 100;
-        cache.set("one", val, {cost: 1});
-        cache.set("two", val, {cost: 2});
-        cache.set("three", val, {cost: 1});
+        cache.set("one", val, { cost: 1 });
+        cache.set("two", val, { cost: 2 });
+        cache.set("three", val, { cost: 1 });
 
-        fakeNow++;
+        fakeNow += 1;
         cache.get("one");
         cache.get("two");
         cache.get("three");
 
-        fakeNow++;
+        fakeNow += 1;
         cache.get("one");
 
-        fakeNow++;
+        fakeNow += 1;
         cache.set("four", val);
 
-        fakeNow++;
+        fakeNow += 1;
         ret = cache.get("three");
 
         assert.deepEqual(ret, null, "least weighted should expire");
@@ -320,8 +338,46 @@ function TestCache (cache) {
         var two = cache.get("two");
         var three = cache.get("three");
 
-        assert.deepEqual(two, null, "should remove uprotected leased accessed");
+        assert.deepEqual(two, null, "should remove unprotected leased accessed");
         assert.deepEqual(three, val, "should respect protected window");
     });
 
-}
+    it("should support enabling and disabling compression", function () {
+        var val = { a : "......", bar : { a : "......", b: "......" } };
+
+        cache.init({
+            compress : false
+        });
+
+        cache.set("one", val);
+        cache.set("two", val);
+
+        var info = cache.info("two");
+        assert.isNotOk(info.compressed, "flag reflects not compressed");
+
+        var uncompressed = cache.stats().bytes;
+
+        cache.init({
+            compress : true
+        });
+        cache.set("one", val);
+        cache.set("two", val);
+
+        info = cache.info("two");
+        assert.isOk(info.compressed, "flag reflects is compressed");
+
+        var compressed = cache.stats().bytes;
+        var two = cache.get("two");
+
+        assert.isBelow(compressed, uncompressed, "should be smaller");
+        assert.deepEqual(two, val, "should not corrupt value");
+    });
+};
+
+describe('Singleton', function () {
+    testCache(NanoCache);
+});
+
+describe('Instance', function () {
+    testCache(new NanoCache());
+});
