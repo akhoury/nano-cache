@@ -8,11 +8,6 @@ NanoCache.prototype.now = function () {
     return fakeNow || (new Date()).getTime();
 };
 
-// protect only immediate writes
-NanoCache.DEFAULTS.protection = 1;
-NanoCache.DEFAULTS.clearExpiredInterval = false;
-
-
 var testCache = function (cache) {
 
     beforeEach(function () {
@@ -33,6 +28,7 @@ var testCache = function (cache) {
         cache.set(key, val);
 
         var ret = cache.get(key);
+
         assert.deepEqual(val, ret);
     });
 
@@ -232,12 +228,11 @@ var testCache = function (cache) {
         assert.deepEqual(ret, null, "should return null on fourth hit");
     });
 
-    it("should expire based on total cache size", function () {
+    it("should evict based on total cache size", function () {
         var val = "12345678"; // 10 inc quotes
         var ret;
         cache.init({
             compress: false,
-            strategy: NanoCache.STRATEGY.OLDEST_ACCESS,
             bytes : 25
         });
         fakeNow = 100;
@@ -254,93 +249,12 @@ var testCache = function (cache) {
 
         fakeNow += 1;
         ret = cache.get("two");
-        assert.deepEqual(ret, null, "least accessed should expire");
+
+        var stats = cache.stats();
+        assert.deepEqual(ret, null, "the least accessed item should expire");
+        assert.equal(stats.evictions, 1, "stats say 1 item evicted");
     });
 
-    it("should expire based on access frequency", function () {
-        var val = "12345678"; // 10 inc quotes
-        var ret;
-        cache.init({
-            strategy: NanoCache.STRATEGY.LOWEST_RATE,
-            bytes : 25
-        });
-        fakeNow = 100;
-        cache.set("one", val);
-        cache.set("two", val);
-
-        fakeNow += 1;
-        cache.get("one");
-        cache.get("one");
-
-        fakeNow += 1;
-        cache.get("two", val);
-
-        fakeNow += 1;
-        cache.set("three", val);
-
-        fakeNow += 1;
-        ret = cache.get("two");
-
-        assert.deepEqual(ret, null, "least expensive should expire");
-    });
-
-    it("should expire based on cost-weighed frequency", function () {
-        var val = "12345678"; // 10 inc quotes
-        var ret;
-        cache.init({
-            strategy: NanoCache.STRATEGY.WEIGHTED,
-            bytes : 35
-        });
-        fakeNow = 100;
-        cache.set("one", val, { cost: 1 });
-        cache.set("two", val, { cost: 2 });
-        cache.set("three", val, { cost: 1 });
-
-        fakeNow += 1;
-        cache.get("one");
-        cache.get("two");
-        cache.get("three");
-
-        fakeNow += 1;
-        cache.get("one");
-
-        fakeNow += 1;
-        cache.set("four", val);
-
-        fakeNow += 1;
-        ret = cache.get("three");
-
-        assert.deepEqual(ret, null, "least weighted should expire");
-    });
-    it("should respect global protection settings", function () {
-        var val = "12345678"; // 10 inc quotes
-        cache.init({
-            protection: 10,
-            bytes : 35
-        });
-
-        fakeNow = 100;
-        cache.set("one", val);
-        cache.set("two", val);
-
-        fakeNow += 10;
-        cache.get("one");
-        cache.get("two");
-
-        fakeNow += 10;
-        cache.get("one");
-        cache.set("three", val);
-
-        fakeNow += 10;
-        cache.set("four", val);
-
-        fakeNow += 10;
-        var two = cache.get("two");
-        var three = cache.get("three");
-
-        assert.deepEqual(two, null, "should remove unprotected leased accessed");
-        assert.deepEqual(three, val, "should respect protected window");
-    });
 
     it("should support enabling and disabling compression", function () {
         var val = { a : "......", bar : { a : "......", b: "......" } };
@@ -375,7 +289,7 @@ var testCache = function (cache) {
 };
 
 describe('Singleton', function () {
-    testCache(NanoCache);
+    //testCache(NanoCache);
 });
 
 describe('Instance', function () {

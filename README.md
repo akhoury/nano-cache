@@ -1,6 +1,15 @@
 # nano-cache
 A little in-memory cache solution for nodejs.
 
+##  Features
+* In memory cache storage for key-value caching.
+* Expiration configured  by number of accesses or time interval.
+* Limits memory usage by total usage or minimum free memory.
+* Supports compressed memory higher capacity
+* Eviction by Least Recently Used algorithm.
+* Stats for cache hits, memory used, and evictions.
+* Not constrained by heap memory limit (about 1.5GB, depending on platform)
+
 ##  Installation
 ```
 > npm install --save-dev nano-cache
@@ -24,13 +33,9 @@ Use of the default singleton is optional. New cache objects can be constructed w
 ```
 var NanoCache = require('nano-cache');
 var cache = new NanoCache({
-    ttl: 30000,
-    limit: 5,
-    clearExpiredInterval: 60000
-    strategy : NanoCache.STRATEGY.WEIGHTED,
-    bytes : 100 * NanoCache.SIZE.MB,
-    protection: 60000,
-    compress: true
+    ttl: 30000,                      // max aged for cache entry
+    limit: 5,                        // max hits for a cache entry
+    bytes : 100 * NanoCache.SIZE.MB, // max memory use for data
 });
 cache.set('mykey', myvalue);
 ```
@@ -70,16 +75,12 @@ var value = NanoCache.get('mykey');
 * `ttl` time in msec before the item is removed from cache. defaults to null for no limit.
 * `limit` maximum number of reads before item is removed from cache. defaults to null for no limit.
 * `bytes` maximum number of bytes before an item removed from the cache. defaults to Infinity for no limit.
-* `protection` number of msec in which to protect an item from expiry by rate limit. defaults to defaults to 60,000 msec
-* `clearExpiredInterval` if non-zero, interval to check cache for expired items. defaults to 60,000 msec.
-* `strategy` cache eviction strategy if byte limit is reached. can be OLDEST_ACCESS, LOWEST_RATE, or defaults to WEIGHTED.
-* `compress` use compression to reduce in-memory cache size. defaults to true.
 
-# Eviction Strategies:
-* `OLDEST_ACCESS` - the least recently access item is removed
-* `LOWEST_RATE` - the least frequently accessed item is removed, defined by hits over lifetime of item.
-* `WEIGHTED` - similar to LOWEST_RATE, but uses a cost-weighted average, defined by hits over time times item cost.
 
+# Advanced Options
+* `compress` - use compression to reduce in-memory cache size. Defaults to true, but can be disabled for improved peformance.
+* `minFreeMem` - items will be evicted from cache if `os.freemem()` is lower. Defaults to 2% of total memory.
+* `maxEvictBytes`  - maximum amount of memory to be evicted on check, which leaves time for garbage collection.
 
 # License
 

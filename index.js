@@ -7,15 +7,10 @@
 
 var extend = require("extend");
 var zlib = require('zlib');
+var os = require('os');
 
 var NanoCache = function (options) {
     this.init(options);
-};
-
-NanoCache.STRATEGY = {
-    OLDEST_ACCESS : "OLDEST_ACCESS",
-    LOWEST_RATE : "LOWEST_RATE",
-    WEIGHTED : "WEIGHTED"
 };
 
 NanoCache.SIZE = {
@@ -29,15 +24,17 @@ NanoCache.DEFAULTS = {
     limit: null, // hits
     bytes: Infinity,
     compress: true,
-    protection: 60 * 1000, // msec
-    strategy: NanoCache.STRATEGY.WEIGHTED
+    minFreeMem : os.totalmem() * .05,
+    maxEvictBytes : os.totalmem() * .05
 };
 
 NanoCache.prototype = {
     init : function (opt) {
         this.options = extend({}, NanoCache.DEFAULTS, opt);
         this.hits = 0;
+        this.evictions = 0;
         this.misses = 0;
+        this._lastAccess = [];
         this.clear();
     },
 
@@ -55,11 +52,26 @@ NanoCache.prototype = {
         this.hits++;
         datum.hits++;
         datum.accessed = this.now();
+        this._updateActiveIndex(datum.key);
 
         this.asyncExpireCheck();
 
         return value;
+    },
 
+    _updateActiveIndex : function (key) {
+        this._removeFromActive(key);
+        this._lastAccess.push(key);
+    },
+
+    _removeFromActive : function (key){
+        var la = this._lastAccess;
+        for(var i = la.length - 1; i >= 0; i--){
+            if(la[i] === key){
+                la.splice(i, 1);
+                break;
+            }
+        }
     },
 
     asyncExpireCheck : function () {
@@ -83,7 +95,9 @@ NanoCache.prototype = {
         var store_value = compressed
             ? zlib.deflateRawSync(json)
             : json;
-        var bytes = Buffer.byteLength(store_value, 'utf8');
+
+        var store_buffer = Buffer.from(store_value);
+        var bytes = Buffer.byteLength(store_buffer, 'utf8');
 
         var datum = {
             key: key,
@@ -91,13 +105,14 @@ NanoCache.prototype = {
             accessed : epoch,
             updated : epoch,
             expires :  null,
-            value : store_value,
+            value : store_buffer,
             bytes : bytes,
             ttl: opt.ttl,
             compressed: compressed,
             cost: opt.cost || 1,
             limit: opt.limit
         };
+
         this._data[key] = datum;
 
         this.bytes += datum.bytes;
@@ -115,6 +130,7 @@ NanoCache.prototype = {
             datum.expires = opt.expires;
         }
 
+        this._updateActiveIndex(datum.key);
         this._checkLimits();
 
         return datum.value;
@@ -149,6 +165,8 @@ NanoCache.prototype = {
         }
         this.bytes -= info.bytes;
         delete this._data[key];
+        this._removeFromActive(key);
+
         return info.value;
     },
 
@@ -170,13 +188,21 @@ NanoCache.prototype = {
     _checkLimits : function () {
         this.clearExpired();
 
-        var self = this;
-
         if (this.options.bytes) {
             this._doEviction(function () {
-                var stats = self.stats();
-                return stats.bytes > self.options.bytes;
-            });
+                var stats = this.stats();
+                return stats.bytes > this.options.bytes;
+            }.bind(this));
+        }
+
+        // check hard memory constraints
+        this._doEviction(function () {
+            return os.freemem() < this.options.minFreeMem;
+        }.bind(this));
+
+        // manual garbage collection can be enabled with `node --expose-gc`
+        if( global.gc ){
+            global.gc();
         }
     },
 
@@ -199,111 +225,36 @@ NanoCache.prototype = {
     },
 
     stats : function () {
+        var oldest = this._data[this._lastAccess[0]];
         return {
-            count: Object.keys(this._data).length,
+            count: this._lastAccess.length,
+            age : oldest && this.now() - oldest.accessed,
             hits : this.hits,
+            evictions: this.evictions,
             misses : this.misses,
             bytes: this.bytes
         };
     },
 
     _doEviction : function (callback) {
-        switch (this.options.strategy) {
-            case NanoCache.STRATEGY.WEIGHTED:
-                this._evictWeightedRate(callback);
-                break;
-            case NanoCache.STRATEGY.LOWEST_RATE:
-                this._evictLeastUsed(callback);
-                break;
-            case NanoCache.STRATEGY.OLDEST_ACCESS:
-                this._evictOldest(callback);
-                break;
-        }
-    },
-
-    _evictOldest : function (callback) {
-        var keepGoing = callback();
-        if (!keepGoing) {
-            return;
-        }
-        var items = this._getItemHeuristics();
-        var sorted = items.sort(this._getSortProtectedFn("accessed"));
-
-        while (keepGoing) {
-            this.del(sorted.pop().key);
-            keepGoing = callback();
-        }
-    },
-
-    _evictLeastUsed : function (callback) {
         var keepGoing = callback();
         if (!keepGoing) {
             return;
         }
 
-        var items = this._getItemHeuristics();
-        var sorted = items.sort(this._getSortProtectedFn("rate"));
-        var key;
-
-        while (keepGoing) {
-            key = sorted.pop().key;
-            this.del(key);
+        var sorted  = this._lastAccess;
+        var maxEvictBytes = this.options.maxEvictBytes;
+        var bytes;
+        while (keepGoing && sorted.length && maxEvictBytes > 0 ) {
+            var key = sorted.shift();
+            bytes = this._data[key].bytes;
+            maxEvictBytes -= bytes;
+            this.evictions++;
+            this.del( key );
             keepGoing = callback();
         }
-    },
-
-    _evictWeightedRate : function (callback) {
-        var keepGoing = callback();
-        if (!keepGoing) {
-            return;
-        }
-
-        var items = this._getItemHeuristics();
-        var sorted = items.sort(this._getSortProtectedFn("weight"));
-        var key;
-
-        while (keepGoing) {
-            key = sorted.pop().key;
-            this.del(key);
-            keepGoing = callback();
-        }
-    },
-
-    _getSortProtectedFn : function (prop) {
-        return function (a, b) {
-            if (a.protected < b.protected) {
-                return 1;
-            }
-
-            if (b.protected > a.protected) {
-                return -1;
-            }
-
-            if (a[prop] === b[prop]) {
-                return 0;
-            }
-
-            return a[prop] < b[prop] ? 1 : -1;
-        }.bind(this);
-    },
-
-    _getItemHeuristics : function () {
-        var keys = Object.keys(this._data);
-        var present = this.now();
-
-        return keys.map(function (key) {
-            var datum = this._data[key];
-            var age = (present - datum.updated);
-            var rate = datum.hits / age;
-
-            return extend({
-                rate: rate,
-                weight: (rate * datum.cost),
-                protected: Math.max(this.options.protection - age + 1, 0),
-                age: age
-            }, datum);
-        }.bind(this));
     }
+
 };
 
 // make it usable even without creating an instance of it.
