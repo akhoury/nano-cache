@@ -2,7 +2,7 @@
 A little in-memory cache solution for nodejs.
 
 ##  Features
-* In memory cache storage for key-value caching.
+* In memory cache storage for any JSON serializable data.
 * Expiration configured  by number of accesses or time interval.
 * Limits memory usage by total usage or minimum free memory.
 * Supports compressed memory higher capacity
