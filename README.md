@@ -48,7 +48,6 @@ var cache = require('nano-cache');
 NanoCache.set('mykey', myvalue, {
     ttl: 60000, // ttl 60 seconds
     limit: 10 // limits the read count to 10 times, the 10'th time will expire the cache
-    cost: 1 // user-defined relative cost to replace, defaults to 1. more expensive items are preserved longer.
 });
 ```
 
@@ -78,8 +77,8 @@ var value = NanoCache.get('mykey');
 
 
 # Advanced Options
-* `compress` - use compression to reduce in-memory cache size. Defaults to true, but can be disabled for improved peformance.
-* `minFreeMem` - items will be evicted from cache if `os.freemem()` is lower. Defaults to 2% of total memory.
+* `compress` - use compression to reduce in-memory cache size. Defaults to true, but can be disabled for improved speed at the cost of memory size.
+* `minFreeMem` - items will be evicted from cache if `os.freemem()` is lower. Defaults to 5% of total memory.
 * `maxEvictBytes`  - maximum amount of memory to be evicted on check, which leaves time for garbage collection.
 
 # License
