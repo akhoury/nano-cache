@@ -289,7 +289,7 @@ var testCache = function (cache) {
 };
 
 describe('Singleton', function () {
-    //testCache(NanoCache);
+    testCache(NanoCache);
 });
 
 describe('Instance', function () {

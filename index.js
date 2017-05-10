@@ -90,9 +90,8 @@ NanoCache.prototype = {
 
         var epoch = this.now();
         var json = JSON.stringify(value);
-        var compressed = this.options.compress;
 
-        var store_value = compressed
+        var store_value = opt.compress
             ? zlib.deflateRawSync(json)
             : json;
 
@@ -108,7 +107,7 @@ NanoCache.prototype = {
             value : store_buffer,
             bytes : bytes,
             ttl: opt.ttl,
-            compressed: compressed,
+            compressed: opt.compress,
             cost: opt.cost || 1,
             limit: opt.limit
         };
