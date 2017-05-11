@@ -5,7 +5,7 @@ A little in-memory cache solution for nodejs.
 * In memory cache storage for any JSON serializable data.
 * Expiration configured  by number of accesses or time interval.
 * Limits memory usage by total usage or minimum free memory.
-* Supports compressed memory for higher capacity
+* Supports compressed memory higher capacity
 * Eviction by Least Recently Used algorithm.
 * Stats for cache hits, memory used, and evictions.
 * Not constrained by heap memory limit (about 1.5GB, depending on platform)
