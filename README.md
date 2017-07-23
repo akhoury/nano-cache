@@ -50,7 +50,7 @@ cache.set('mykey', myvalue);
 ## cache.set(key, value, options)
 Set the item in the cache dictionary, overriding any previous value or settings for the key.
 The `value` must be a JSON-serializable object which includes simple strings, numbers, or booleans.
-```
+```javascript
 var cache = require('nano-cache');
 NanoCache.set('mykey', myvalue, {
     ttl: 60000, // ttl 60 seconds
