@@ -19,7 +19,7 @@ A little in-memory cache solution for nodejs.
 ## Use
 
 The NanoCache constructor is also a singleton which can be used directly or as a factory.
-```
+```javascript
 // use the default singleton
 var cache = require('nano-cache');
 
@@ -37,7 +37,7 @@ cache.on('clear', function () { /* ... */ });
 
 ## new NanoCache(options)
 Use of the default singleton is optional. New cache objects can be constructed with custom configurations.
-```
+```javascript
 var NanoCache = require('nano-cache');
 var cache = new NanoCache({
     ttl: 30000,                      // max aged for cache entry
@@ -60,7 +60,7 @@ NanoCache.set('mykey', myvalue, {
 
 ## cache.get(key)
 Returns the value from the cache, or null if non-existent or expired.
-```
+```javascript
 NanoCache.set('mykey', myvalue)
 var value = NanoCache.get('mykey');
 ```
