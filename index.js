@@ -8,6 +8,7 @@
 var extend = require("extend");
 var zlib = require('zlib');
 var os = require('os');
+var EventEmitter = require('events').EventEmitter;
 
 var NanoCache = function (options) {
     this.init(options);
@@ -28,7 +29,7 @@ NanoCache.DEFAULTS = {
     maxEvictBytes : os.totalmem() * .05
 };
 
-NanoCache.prototype = {
+NanoCache.prototype = extend(true, {}, Object.create(EventEmitter.prototype), {
     init : function (opt) {
         this.options = extend({}, NanoCache.DEFAULTS, opt);
         this.hits = 0;
@@ -56,6 +57,7 @@ NanoCache.prototype = {
 
         this.asyncExpireCheck();
 
+        this.emit('get', key);
         return value;
     },
 
@@ -132,7 +134,8 @@ NanoCache.prototype = {
         this._updateActiveIndex(datum.key);
         this._checkLimits();
 
-        return datum.value;
+        this.emit('set', key);
+        return value;
     },
 
     info : function (key) {
@@ -165,13 +168,14 @@ NanoCache.prototype = {
         this.bytes -= info.bytes;
         delete this._data[key];
         this._removeFromActive(key);
-
+        this.emit('del', key);
         return info.value;
     },
 
     clear: function () {
         this._data = {};
         this.bytes = 0;
+        this.emit('clear');
     },
 
     clearExpired: function () {
@@ -253,8 +257,7 @@ NanoCache.prototype = {
             keepGoing = callback();
         }
     }
-
-};
+});
 
 // make it usable even without creating an instance of it.
 // basically creating an instance, then copying all non-underscore-starting-functions to the factory

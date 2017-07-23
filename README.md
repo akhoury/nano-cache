@@ -9,6 +9,7 @@ A little in-memory cache solution for nodejs.
 * Eviction by Least Recently Used algorithm.
 * Stats for cache hits, memory used, and evictions.
 * Not constrained by heap memory limit (about 1.5GB, depending on platform)
+* Emits events when some actions occurs.
 
 ##  Installation
 ```
@@ -25,6 +26,12 @@ var cache = require('nano-cache');
 // or construct your own
 var NanoCache = require('nano-cache');
 var cache = new NanoCache();
+
+// listen to events
+cache.on('del', function (deletedKey) { /* ... */ });
+cache.on('get', function (accessedKey) { /* ... */ });
+cache.on('set', function (setKey) { /* ... */ });
+cache.on('clear', function () { /* ... */ });
 ```
 
 
@@ -69,6 +76,23 @@ var value = NanoCache.get('mykey');
 * `isLimitReached(key)` check if a key's read count has reached its limit, returns `true/false`, always `false` if there is no limit set
 * `info(key)` returns information about key, including access time, hits, and expiry
 * `stats()` returns number of items in cache, total byte size, and hit/miss ratio
+
+### EventEmitter
+Every `cache` instance extends the [EventEmitter](https://nodejs.org/api/events.html#events_class_eventemitter) object, so it has all of its methods. However, the most common used ones are probably the following:
+
+* `on(eventName, callback)`
+* `once(eventName, callback)`
+* `emit(eventName, callback)`
+* `removeListener(eventName)`
+* `removeAllListeners(eventName, listenerCallbackReference)`
+
+### Native Events
+Every `cache` instance will `emit` the following events.
+
+* `'del'` when a key is deleted. Its listeners callbacks will receive the `deletedKey` as the 1st argument.
+* `'get'` when a key is accessed. Its listeners callbacks will receive the `accessedKey` as the 1st argument.
+* `'set'` when a key is set. Its listeners callbacks will receive the `setKey` as the 1st argument.
+* `'clear'` when all is clear from memory. No argument is passed to the listeners.
 
 #  Constructor Options
 * `ttl` time in msec before the item is removed from cache. defaults to null for no limit.

@@ -67,6 +67,35 @@ var testCache = function (cache) {
         assert.equal(stats.bytes, 0, "should have no bytes");
     });
 
+    it('should be fire events on actions', function (done) {
+        var key = "foo";
+        var val = {
+            foo : 123,
+            bar : {
+                a : 123,
+                b : 123
+            }
+        };
+        cache.once('set', function (setKey) {
+            assert.equal(setKey, key, "should have been the set key");
+        });
+        cache.once('get', function (accessedKey) {
+            assert.equal(accessedKey, key, "should have been the accessed key");
+        });
+        cache.once('del', function (deleteKey) {
+            assert.equal(deleteKey, key, "should have been the deleted key");
+        });
+
+        this.timeout(1000);
+        cache.once('clear', function () {
+            // if this doesn't fire in 1000ms, timeout this test
+            done();
+        });
+        cache.set(key, val);
+        cache.get(key);
+        cache.del(key);
+        cache.clear(key);
+    });
 
     it('should be a clone of original data', function () {
         var key = "foo";
