@@ -25,7 +25,7 @@ NanoCache.DEFAULTS = {
     limit: null, // hits
     bytes: Infinity,
     compress: true,
-    minFreeMem : os.totalmem() * .05,
+    minFreeMem : 0,
     maxEvictBytes : os.totalmem() * .05
 };
 
@@ -191,10 +191,10 @@ NanoCache.prototype = extend(true, {}, Object.create(EventEmitter.prototype), {
     _checkLimits : function () {
         this.clearExpired();
 
-        if (this.options.bytes) {
+        if (this.options.maxBytes) {
             this._doEviction(function () {
                 var stats = this.stats();
-                return stats.bytes > this.options.bytes;
+                return stats.bytes > this.options.maxBytes;
             }.bind(this));
         }
 

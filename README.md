@@ -102,8 +102,8 @@ Every `cache` instance will `emit` the following events.
 
 # Advanced Options
 * `compress` - use compression to reduce in-memory cache size. Defaults to true, but can be disabled for improved speed at the cost of memory size.
-* `minFreeMem` - items will be evicted from cache if `os.freemem()` is lower. Defaults to 5% of total memory.
-* `maxEvictBytes`  - maximum amount of memory to be evicted on check, which leaves time for garbage collection.
+* `minFreeMem` - items will be evicted from cache if `os.freemem()` is lower. Defaults to 0% of total memory.
+* `maxEvictBytes`  - maximum amount of memory to be evicted on check, which leaves time for garbage collection, defaults to 5% of total memory.
 
 # License
 
